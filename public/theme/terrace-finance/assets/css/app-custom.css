@@ -1,0 +1,65 @@
+.tf-login-bg{
+  background: url("/images/bg/tfc-login.jpg") no-repeat center center fixed;
+  background-size: cover;
+}
+
+.tf-login-overlay{
+  min-height: 100vh;
+  background: rgba(0,0,0,.45);
+}
+
+.tf-table thead th{
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.tf-table td{
+  vertical-align: middle;
+}
+
+.tf-table{
+  min-width: 1400px; /* adjust based on your columns */
+}
+
+.tf-chip{
+  display: inline-block;
+  padding: .35rem .6rem;
+  border-radius: 999px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.tf-chip-soft{
+  background: rgba(0,0,0,.06);
+  color: rgba(0,0,0,.75);
+}
+
+.tf-chip-money{
+  background: rgba(25,135,84,.12);
+  color: #198754;
+}
+
+.tf-chip-warning{
+  background: rgba(255,193,7,.18);
+  color: #8a6d00;
+}
+
+.tf-chip-info{
+  background: rgba(13,110,253,.12);
+  color: #0d6efd;
+}
+
+.tf-chip-muted{
+  background: rgba(108,117,125,.12);
+  color: #6c757d;
+}
+
+/* keeps table header clean */
+.tf-table thead th{
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.tf-table td{
+  vertical-align: middle;
+}
