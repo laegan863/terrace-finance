@@ -188,12 +188,31 @@
                             <td><span class="tf-chip tf-chip-soft">{{ $h['Status'] }}</span></td>
                             <td class="text-muted">{{ $h['CreatedAt'] }}</td>
                             <td class="text-end">
-                                <button class="btn btn-sm btn-outline-primary" type="button" disabled>View</button>
+                                <button
+                                    type="button"
+                                    class="btn btn-sm btn-outline-primary appViewBtn"
+                                    data-id="{{ $h['ApplicationID'] ?? '-' }}"
+                                    data-applicant="{{ $h['Applicant'] ?? '-' }}"
+                                    data-product="{{ $h['ProductInformation'] ?? '-' }}"
+                                    data-amount="{{ isset($h['BestEstimate']) ? number_format((float)$h['BestEstimate'], 2) : '-' }}"
+                                    data-frequency="{{ $h['PayFrequency'] ?? '-' }}"
+                                    data-status="{{ $h['Status'] ?? '-' }}"
+                                    data-created="{{ $h['CreatedAt'] ?? '-' }}"
+                                    data-http="@json(optional($history->getCollection()->firstWhere('id', $h['ApplicationID']))?->result?->http_status ?? '-')"
+                                    data-response='@json(optional($history->getCollection()->firstWhere("id", $h["ApplicationID"]))?->result?->response ?? [])'
+                                >
+                                    View
+                                </button>
+
                             </td>
                         </tr>
                     @endforeach
                 </tbody>
             </table>
+        </div>
+
+        <div class="mt-3">
+            {{ $history->links() }}
         </div>
     </div>
 </div>
@@ -407,6 +426,72 @@
         </div>
     </div>
 </div>
+
+{{-- View Application Modal --}}
+<div class="modal fade" id="viewApplicationModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title mb-0">Application Details <span id="viewAppId" class="text-muted"></span></h5>
+                    <small class="text-muted">View application request information and API response</small>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+
+            <div class="modal-body p-4">
+                <h6 class="fw-bold mb-3"><i class="fas fa-file-signature me-2"></i>Application Information</h6>
+
+                <div class="row mb-4">
+                    <div class="col-md-6 mb-2">
+                        <small class="text-muted d-block">Applicant</small>
+                        <span id="viewAppApplicant" class="fw-semibold"></span>
+                    </div>
+
+                    <div class="col-md-6 mb-2">
+                        <small class="text-muted d-block">Product Information</small>
+                        <span id="viewAppProduct"></span>
+                    </div>
+
+                    <div class="col-md-6 mb-2">
+                        <small class="text-muted d-block">Requested Amount</small>
+                        <span id="viewAppAmount"></span>
+                    </div>
+
+                    <div class="col-md-6 mb-2">
+                        <small class="text-muted d-block">Pay Frequency</small>
+                        <span id="viewAppFrequency"></span>
+                    </div>
+
+                    <div class="col-md-6 mb-2">
+                        <small class="text-muted d-block">Created At</small>
+                        <span id="viewAppCreated"></span>
+                    </div>
+                </div>
+
+                <hr>
+
+                <h6 class="fw-bold mb-3"><i class="fas fa-info-circle me-2"></i>Status</h6>
+                <div class="mb-4">
+                    <span id="viewAppStatusBadge" class="badge"></span>
+                    <span id="viewAppHttpBadge" class="badge bg-secondary ms-2"></span>
+                </div>
+
+                <hr>
+
+                <h6 class="fw-bold mb-3"><i class="fas fa-code me-2"></i>API Response</h6>
+                <div class="bg-light rounded p-3">
+                    <pre id="viewAppResponse" class="mb-0" style="white-space: pre-wrap; word-break: break-word; max-height: 300px; overflow-y: auto;"></pre>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 @endsection
 
 @push('scripts')
@@ -476,3 +561,60 @@
 </script>
 @endif
 @endpush
+
+{{-- View Modal --}}
+@push('scripts')
+<script>
+(function () {
+    const modalEl = document.getElementById('viewApplicationModal');
+    if (!modalEl) return;
+
+    const modal = new bootstrap.Modal(modalEl);
+
+    function setText(id, value) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = (value === null || value === undefined || value === '') ? '-' : value;
+    }
+
+    function setStatusBadge(status) {
+        const el = document.getElementById('viewAppStatusBadge');
+        if (!el) return;
+
+        el.className = 'badge';
+
+        const s = (status || '').toLowerCase();
+        if (s === 'success') el.classList.add('bg-success');
+        else if (s === 'failed') el.classList.add('bg-danger');
+        else el.classList.add('bg-warning', 'text-dark');
+
+        el.textContent = status ? (status.charAt(0).toUpperCase() + status.slice(1)) : '-';
+    }
+
+    document.addEventListener('click', function (e) {
+        const btn = e.target.closest('.appViewBtn');
+        if (!btn) return;
+
+        setText('viewAppId', '#' + (btn.dataset.id || '-'));
+        setText('viewAppApplicant', btn.dataset.applicant);
+        setText('viewAppProduct', btn.dataset.product);
+        setText('viewAppAmount', btn.dataset.amount ? ('$' + btn.dataset.amount) : '-');
+        setText('viewAppFrequency', btn.dataset.frequency);
+        setText('viewAppCreated', btn.dataset.created);
+
+        setStatusBadge(btn.dataset.status || '-');
+        setText('viewAppHttpBadge', 'HTTP ' + (btn.dataset.http || '-'));
+
+        let responseObj = {};
+        try {
+            responseObj = JSON.parse(btn.dataset.response || '{}');
+        } catch (err) {
+            responseObj = {};
+        }
+        setText('viewAppResponse', JSON.stringify(responseObj, null, 4));
+
+        modal.show();
+    });
+})();
+</script>
+@endpush
+

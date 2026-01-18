@@ -2,54 +2,116 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ApplicationStatusRequest;
 use Illuminate\Http\Request;
 
 class TerraceFinanceApplicationStatusController extends Controller
 {
     public function index(Request $request)
     {
+        $logs = ApplicationStatusRequest::with('result')
+            ->orderByDesc('id')
+            ->paginate(10);
+
+        $hasQuery = $request->has('ApplicationID');
         $applicationId = (int)($request->query('ApplicationID') ?: 89143);
 
-        $result = $this->sampleResult($applicationId);
+        // If user submitted a new request (ApplicationID in query), compute + log it
+        if ($hasQuery) {
+            $result = $this->sampleResult($applicationId);
 
+            $offers = $result['response']['Result']['Offer'] ?? null;
+            $offersArr = is_array($offers) ? $offers : [];
+
+            $scenario = $this->scenarioFromApplicationId($applicationId);
+
+            $log = ApplicationStatusRequest::create([
+                'ApplicationID' => $applicationId,
+                'scenario' => $scenario,
+                'status' => 'pending',
+            ]);
+
+            $log->result()->create([
+                'http_status' => 200,
+                'response' => $result['response'],
+                'offers' => $offersArr,
+            ]);
+
+            $log->status = !empty($result['response']['IsSuccess']) ? 'success' : 'failed';
+            $log->save();
+
+            return view('terrace-finance.application-status.index', [
+                'result' => $result,
+                'offers' => $offersArr,
+                'applicationId' => $applicationId,
+                'logs' => $logs,
+            ]);
+        }
+
+        // Otherwise show latest saved record if exists
+        $latest = ApplicationStatusRequest::with('result')->latest()->first();
+
+        if ($latest && $latest->result) {
+            $response = $latest->result->response ?? [];
+            $result = [
+                'request' => ['ApplicationID' => $latest->ApplicationID],
+                'response' => $response,
+            ];
+
+            return view('terrace-finance.application-status.index', [
+                'result' => $result,
+                'offers' => $latest->result->offers ?? [],
+                'applicationId' => $latest->ApplicationID,
+                'logs' => $logs,
+            ]);
+        }
+
+        // Fallback sample display only (no log)
+        $result = $this->sampleResult($applicationId);
         $offers = $result['response']['Result']['Offer'] ?? null;
 
         return view('terrace-finance.application-status.index', [
             'result' => $result,
             'offers' => is_array($offers) ? $offers : [],
             'applicationId' => $applicationId,
+            'logs' => $logs,
         ]);
+    }
+
+    public function store(Request $request)
+    {
+        $data = $request->validate([
+            'ApplicationID' => ['required', 'digits_between:1,10'],
+        ]);
+
+        // Redirect to index with query param so it still shows the result,
+        // but keeps the submission as POST (prevents duplicates on refresh).
+        return redirect()->route('tfc.application-status.index', [
+            'ApplicationID' => $data['ApplicationID'],
+        ]);
+    }
+
+
+    private function scenarioFromApplicationId(int $applicationId): string
+    {
+        if ($applicationId === 80741) return 'redirect';
+        if ($applicationId === 80766) return 'decline';
+        return 'core';
     }
 
     private function sampleResult(int $applicationId): array
     {
-        // Uses the example ApplicationIDs from pages 27–28 to select which example to display.
-        // 80741 => Example 2 Success (RedirectUrl offer schema)
-        // 80766 => Example 3 Decline (Offer null)
-        // Everything else => Example 1 style (core offer schema)
-
-        $request = [
-            'ApplicationID' => $applicationId,
-        ];
+        $request = ['ApplicationID' => $applicationId];
 
         if ($applicationId === 80741) {
-            return [
-                'request' => $request,
-                'response' => $this->example2Success($applicationId),
-            ];
+            return ['request' => $request, 'response' => $this->example2Success($applicationId)];
         }
 
         if ($applicationId === 80766) {
-            return [
-                'request' => $request,
-                'response' => $this->example3Decline($applicationId),
-            ];
+            return ['request' => $request, 'response' => $this->example3Decline($applicationId)];
         }
 
-        return [
-            'request' => $request,
-            'response' => $this->example1CoreOffer($applicationId),
-        ];
+        return ['request' => $request, 'response' => $this->example1CoreOffer($applicationId)];
     }
 
     private function baseResponse(): array

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\InvoiceRequest;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 
@@ -99,56 +100,49 @@ class TerraceFinanceInvoiceController extends Controller
         return compact('request', 'response');
     }
 
-    private function recentInvoices(): array
-    {
-        return [
-            [
-                'InvoiceNumber' => 'DLX1367',
-                'ApplicationID' => 108597,
-                'LeadID' => null,
-                'InvoiceDate' => '02-12-2025',
-                'DeliveryDate' => '02-13-2025',
-                'ApplicationStatus' => 'Approved',
-                'ApprovalAmount' => 1675.00,
-                'CreatedAt' => 'Jan 13, 2026 09:22 AM',
-            ],
-            [
-                'InvoiceNumber' => 'INV-2026-0008',
-                'ApplicationID' => 99044,
-                'LeadID' => null,
-                'InvoiceDate' => '01-12-2026',
-                'DeliveryDate' => '01-13-2026',
-                'ApplicationStatus' => 'Pending Invoice',
-                'ApprovalAmount' => 1500.00,
-                'CreatedAt' => 'Jan 12, 2026 02:18 PM',
-            ],
-            [
-                'InvoiceNumber' => 'INV-2026-0005',
-                'ApplicationID' => null,
-                'LeadID' => 1234,
-                'InvoiceDate' => '01-10-2026',
-                'DeliveryDate' => '01-11-2026',
-                'ApplicationStatus' => 'Draft',
-                'ApprovalAmount' => null,
-                'CreatedAt' => 'Jan 10, 2026 11:40 AM',
-            ],
-        ];
-    }
-
     public function index()
     {
+        $latest = InvoiceRequest::with('result')->latest()->first();
+
+        if ($latest && $latest->result) {
+            $requestData = $latest->only([
+                'InvoiceNumber','InvoiceDate','DeliveryDate',
+                'ApplicationID','LeadID',
+                'Discount','DownPayment','Shipping','Tax',
+                'ReturnURL','InvoiceVersion','Items'
+            ]);
+
+            $response = $latest->result->response ?? [];
+            $resultObj = $response['Result'] ?? [];
+            $offers = $resultObj['Offer'] ?? [];
+
+            return view('terrace-finance.invoices.index', [
+                'result' => [
+                    'request' => $requestData,
+                    'response' => $response,
+                ],
+                'offers' => is_array($offers) ? $offers : [],
+            ]);
+        }
+
         $sample = $this->sample();
+        $response = $sample['response'];
+        $offers = $response['Result']['Offer'] ?? [];
 
         return view('terrace-finance.invoices.index', [
             'result' => $sample,
-            'recentInvoices' => $this->recentInvoices(),
+            'offers' => $offers,
         ]);
     }
 
     public function history()
     {
+        $logs = InvoiceRequest::with('result')
+            ->orderByDesc('id')
+            ->paginate(10);
+
         return view('terrace-finance.invoices.history', [
-            'invoices' => $this->recentInvoices(), // sample rows for now
+            'logs' => $logs,
         ]);
     }
 
@@ -175,16 +169,12 @@ class TerraceFinanceInvoiceController extends Controller
             'Items.*.Brand' => ['required', 'string', 'min:2', 'max:64'],
             'Items.*.SerialNumber' => ['nullable', 'string', 'max:128'],
             'Items.*.SKU' => ['required', 'string', 'min:2', 'max:32'],
-
-            // Condition allowed values: New, Used, CPO, Refurbished, Parts, Salvage :contentReference[oaicite:8]{index=8}
             'Items.*.Condition' => ['required', 'in:New,Used,CPO,Refurbished,Parts,Salvage'],
-
             'Items.*.Price' => ['required', 'numeric'],
             'Items.*.Quantity' => ['required', 'integer', 'min:1'],
             'Items.*.Discount' => ['nullable', 'numeric'],
         ]);
 
-        // Enforce mm-dd-yyyy for InvoiceDate and DeliveryDate :contentReference[oaicite:9]{index=9}
         foreach (['InvoiceDate', 'DeliveryDate'] as $field) {
             try {
                 $data[$field] = Carbon::createFromFormat('m-d-Y', $data[$field])->format('m-d-Y');
@@ -195,22 +185,31 @@ class TerraceFinanceInvoiceController extends Controller
             }
         }
 
-        // Normalize invoice version: treat empty string as null
         if (empty($data['InvoiceVersion'])) {
             $data['InvoiceVersion'] = null;
         }
 
-        // You can compute per-item totals here if you want, but API accepts without "Total" in example.
-        // We will proceed as-is and return a response-like structure.
+        // 1) Save request log
+        $invoiceRequest = InvoiceRequest::create(array_merge($data, [
+            'status' => 'pending',
+        ]));
 
+        // 2) Produce response (static for now)
+        $httpStatus = 200;
         $response = $this->sample()['response'];
 
-        return view('terrace-finance.invoices.index', [
-            'result' => [
-                'request' => $data,
-                'response' => $response,
-            ],
-            'recentInvoices' => $this->recentInvoices(),
+        // 3) Save result
+        $invoiceRequest->result()->create([
+            'http_status' => $httpStatus,
+            'response' => $response,
         ]);
+
+        // 4) Update status
+        $invoiceRequest->status = !empty($response['IsSuccess']) ? 'success' : 'failed';
+        $invoiceRequest->save();
+
+        // Redirect back to index (clean pagination)
+        return redirect()->route('tfc.invoices.index');
     }
+
 }

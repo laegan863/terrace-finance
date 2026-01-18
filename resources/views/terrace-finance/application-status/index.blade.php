@@ -352,12 +352,98 @@
             @endif
         </div>
     </div>
+
+    @if(isset($logs))
+        <div class="card mt-3">
+            <div class="card-header d-flex align-items-center justify-content-between">
+                <div>
+                    <div class="card-title mb-0">Application Status Requests</div>
+                    <small class="text-muted">Latest submissions</small>
+                </div>
+            </div>
+
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover align-middle tf-table">
+                        <thead>
+                            <tr>
+                                <th>Created At</th>
+                                <th>Application Identifier</th>
+                                <th>Application Status</th>
+                                <th>Lender Name</th>
+                                <th>Lender Status</th>
+                                <th class="text-end">Approval Amount</th>
+                                <th>Status</th>
+                                <th class="text-end">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @forelse($logs as $log)
+                                @php
+                                    $resp = $log->result->response ?? [];
+                                    $r = $resp['Result'] ?? [];
+                                    $appStatus = $r['ApplicationStatus'] ?? '-';
+                                    $lenderName = $r['LenderName'] ?? '-';
+                                    $lenderStatus = $r['LenderStatus'] ?? '-';
+                                    $approval = $r['ApprovalAmount'] ?? null;
+
+                                    $statusChipClass = 'tf-chip-soft';
+                                    if ($log->status === 'success') $statusChipClass = 'tf-chip-money';
+                                    elseif ($log->status === 'failed') $statusChipClass = 'tf-chip-danger';
+                                @endphp
+                                <tr>
+                                    <td class="text-muted">{{ optional($log->created_at)->format('Y-m-d H:i') }}</td>
+                                    <td><span class="tf-chip tf-chip-soft">{{ $log->ApplicationID }}</span></td>
+                                    <td><span class="tf-chip tf-chip-info">{{ $appStatus }}</span></td>
+                                    <td>{{ $lenderName }}</td>
+                                    <td><span class="tf-chip tf-chip-soft">{{ $lenderStatus }}</span></td>
+                                    <td class="text-end">
+                                        @if(is_null($approval))
+                                            <span class="tf-chip tf-chip-muted">-</span>
+                                        @else
+                                            <span class="tf-chip tf-chip-money">${{ number_format((float)$approval, 2) }}</span>
+                                        @endif
+                                    </td>
+                                    <td><span class="tf-chip {{ $statusChipClass }}">{{ ucfirst($log->status) }}</span></td>
+                                    <td class="text-end">
+                                        <button
+                                            type="button"
+                                            class="btn btn-sm btn-outline-primary appStatusViewBtn"
+                                            data-id="{{ $log->id }}"
+                                            data-applicationid="{{ $log->ApplicationID }}"
+                                            data-scenario="{{ $log->scenario }}"
+                                            data-status="{{ $log->status }}"
+                                            data-created="{{ optional($log->created_at)->format('Y-m-d H:i') }}"
+                                            data-http="{{ $log->result->http_status ?? '-' }}"
+                                            data-offers='@json($log->result->offers ?? [])'
+                                            data-response='@json($log->result->response ?? [])'
+                                        >
+                                            View
+                                        </button>
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr><td colspan="8" class="text-muted">No logs available.</td></tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="mt-3">
+                    {{ $logs->links() }}
+                </div>
+            </div>
+        </div>
+    @endif
+
+    
 @endif
 
 <div class="modal fade" id="statusModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
-            <form method="GET" action="{{ route('tfc.application-status.index') }}">
+            <form method="POST" action="{{ route('tfc.application-status.store') }}">
+                @csrf
                 <div class="modal-header">
                     <div>
                         <h5 class="modal-title mb-0">Retrieve Application Status</h5>
@@ -386,4 +472,123 @@
         </div>
     </div>
 </div>
+
+{{-- View Application Status Modal --}}
+<div class="modal fade" id="viewApplicationStatusModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title mb-0">Application Status Details <span id="viewAsId" class="text-muted"></span></h5>
+                    <small class="text-muted">View request information and response details</small>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+
+            <div class="modal-body p-4">
+                <h6 class="fw-bold mb-3"><i class="fas fa-clipboard-check me-2"></i>Request Information</h6>
+
+                <div class="row mb-4">
+                    <div class="col-md-6 mb-2">
+                        <small class="text-muted d-block">Application Identifier</small>
+                        <span id="viewAsApplicationId" class="fw-semibold"></span>
+                    </div>
+
+                    <div class="col-md-6 mb-2">
+                        <small class="text-muted d-block">Scenario</small>
+                        <span id="viewAsScenario"></span>
+                    </div>
+
+                    <div class="col-md-6 mb-2">
+                        <small class="text-muted d-block">Created At</small>
+                        <span id="viewAsCreated"></span>
+                    </div>
+                </div>
+
+                <hr>
+
+                <h6 class="fw-bold mb-3"><i class="fas fa-info-circle me-2"></i>Status</h6>
+                <div class="mb-4">
+                    <span id="viewAsStatusBadge" class="badge"></span>
+                    <span id="viewAsHttpBadge" class="badge bg-secondary ms-2"></span>
+                </div>
+
+                <hr>
+
+                <h6 class="fw-bold mb-3"><i class="fas fa-code me-2"></i>Response</h6>
+                <div class="bg-light rounded p-3">
+                    <pre id="viewAsResponse" class="mb-0" style="white-space: pre-wrap; word-break: break-word; max-height: 260px; overflow-y: auto;"></pre>
+                </div>
+
+                <hr>
+
+                <h6 class="fw-bold mb-3"><i class="fas fa-tags me-2"></i>Offers</h6>
+                <div class="bg-light rounded p-3">
+                    <pre id="viewAsOffers" class="mb-0" style="white-space: pre-wrap; word-break: break-word; max-height: 260px; overflow-y: auto;"></pre>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 @endsection
+
+@push('scripts')
+<script>
+(function () {
+    const modalEl = document.getElementById('viewApplicationStatusModal');
+    if (!modalEl) return;
+
+    const modal = new bootstrap.Modal(modalEl);
+
+    function setText(id, value) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.textContent = (value === null || value === undefined || value === '') ? '-' : value;
+    }
+
+    function setStatusBadge(status) {
+        const el = document.getElementById('viewAsStatusBadge');
+        if (!el) return;
+
+        el.className = 'badge';
+        const s = (status || '').toLowerCase();
+
+        if (s === 'success') el.classList.add('bg-success');
+        else if (s === 'failed') el.classList.add('bg-danger');
+        else el.classList.add('bg-warning', 'text-dark');
+
+        el.textContent = status ? (status.charAt(0).toUpperCase() + status.slice(1)) : '-';
+    }
+
+    document.addEventListener('click', function (e) {
+        const btn = e.target.closest('.appStatusViewBtn');
+        if (!btn) return;
+
+        setText('viewAsId', '#' + (btn.dataset.id || '-'));
+        setText('viewAsApplicationId', btn.dataset.applicationid || '-');
+        setText('viewAsScenario', btn.dataset.scenario || '-');
+        setText('viewAsCreated', btn.dataset.created || '-');
+
+        setStatusBadge(btn.dataset.status || '-');
+        setText('viewAsHttpBadge', 'HTTP ' + (btn.dataset.http || '-'));
+
+        let responseObj = {};
+        let offersObj = [];
+
+        try { responseObj = JSON.parse(btn.dataset.response || '{}'); } catch (e1) { responseObj = {}; }
+        try { offersObj = JSON.parse(btn.dataset.offers || '[]'); } catch (e2) { offersObj = []; }
+
+        setText('viewAsResponse', JSON.stringify(responseObj, null, 4));
+        setText('viewAsOffers', JSON.stringify(offersObj, null, 4));
+
+        modal.show();
+    });
+})();
+</script>
+@endpush
+

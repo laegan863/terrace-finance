@@ -17,42 +17,51 @@
   vertical-align: middle;
 }
 
-.tf-table{
-  min-width: 1400px; /* adjust based on your columns */
-}
-
 .tf-chip{
   display: inline-block;
-  padding: .35rem .6rem;
+  padding: .38rem .65rem;
   border-radius: 999px;
-  font-weight: 600;
+  font-size: 1rem;
+  font-weight: 700;
   line-height: 1;
   white-space: nowrap;
+  border: 1px solid rgba(0,0,0,.06);
 }
 
 .tf-chip-soft{
   background: rgba(0,0,0,.06);
-  color: rgba(0,0,0,.75);
+  color: rgba(0,0,0,.85);
+  border-color: rgba(0,0,0,.12);
 }
 
 .tf-chip-money{
   background: rgba(25,135,84,.12);
-  color: #198754;
+  color: #0f5132;
+  border-color: rgba(25,135,84,.18);
 }
 
 .tf-chip-warning{
   background: rgba(255,193,7,.18);
-  color: #8a6d00;
+  color: #664d03;
+  border-color: rgba(255,193,7,.24);
+}
+
+.tf-chip-danger{
+  background: rgba(220,53,69,.16);
+  color: #842029;
+  border-color: rgba(220,53,69,.22);
 }
 
 .tf-chip-info{
   background: rgba(13,110,253,.12);
-  color: #0d6efd;
+  color: #084298;
+  border-color: rgba(13,110,253,.18);
 }
 
 .tf-chip-muted{
   background: rgba(108,117,125,.12);
-  color: #6c757d;
+  color: #343a40;
+  border-color: rgba(108,117,125,.18);
 }
 
 /* keeps table header clean */
@@ -63,3 +72,43 @@
 .tf-table td{
   vertical-align: middle;
 }
+
+.pagination{
+    gap: 5px !important;
+}
+
+.tf-items-table-wrap{
+  overflow-x: auto;
+}
+
+.tf-items-table{
+  min-width: 1400px;
+}
+
+.tf-items-table th,
+.tf-items-table td{
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.tf-items-table .form-control,
+.tf-items-table .form-select{
+  min-width: 120px;
+}
+
+.tf-items-table .tf-col-description .form-control{ min-width: 280px; }
+.tf-items-table .tf-col-brand .form-control{ min-width: 160px; }
+.tf-items-table .tf-col-serial .form-control{ min-width: 170px; }
+.tf-items-table .tf-col-sku .form-control{ min-width: 160px; }
+.tf-items-table .tf-col-condition .form-select{ min-width: 160px; }
+.tf-items-table .tf-col-price .form-control{ min-width: 130px; }
+.tf-items-table .tf-col-qty .form-control{ min-width: 100px; }
+.tf-items-table .tf-col-discount .form-control{ min-width: 130px; }
+.tf-items-table .tf-col-action{ min-width: 120px; }
+
+.tf-items-table thead th{
+  font-weight: 700;
+  letter-spacing: .02em;
+}
+
+

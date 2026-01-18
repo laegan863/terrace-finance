@@ -52,7 +52,7 @@
                             <li>
                                 <div class="user-box">
                                     <div class="avatar-lg">
-                                        <img src="{{ asset($theme . '/assets/img/profile.jpg') }}" alt="image profile" class="avatar-img rounded" />
+                                        <img src="{{ asset('/images/profile/user-profile.png') }}" alt="image profile" class="avatar-img rounded" />
                                     </div>
                                     <div class="u-text">
                                         <h4>{{ $user->name ?? 'User' }}</h4>

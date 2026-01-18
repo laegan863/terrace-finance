@@ -32,7 +32,7 @@ $staticLeads = \App\Models\Lead::with('result')->latest()->get();
 
     <div class="card-body">
         <div class="table-responsive">
-            <table class="table table-striped table-hover align-middle">
+            <table class="table table-sm table-striped table-hover align-middle tf-table">
                 <thead>
                     <tr>
                         <th style="width: 140px;">Lead #</th>
@@ -55,19 +55,19 @@ $staticLeads = \App\Models\Lead::with('result')->latest()->get();
                             <td>{{ $l->ProductInformation }}</td>
                             <td>
                                 @if($l->status === 'success')
-                                    <span class="badge bg-success">{{ $l->status }}</span>
+                                    <span class="tf-chip tf-chip-money">{{ $l->status }}</span>
                                 @elseif($l->status === 'failed')
-                                    <span class="badge bg-danger">{{ $l->status }}</span>
+                                    <span class="tf-chip tf-chip-danger">{{ $l->status }}</span>
                                 @else
-                                    <span class="badge bg-warning text-dark">{{ $l->status }}</span>
+                                    <span class="tf-chip tf-chip-warning">{{ $l->status }}</span>
                                 @endif
                             </td>
                             <td>{{ $l->created_at->format('M d, Y H:i') }}</td>
                             <td class="text-end">
-                                <button 
-                                    class="btn btn-sm btn-outline-primary view-lead-btn" 
-                                    type="button" 
-                                    data-bs-toggle="modal" 
+                                <button
+                                    class="btn btn-sm btn-outline-primary view-lead-btn"
+                                    type="button"
+                                    data-bs-toggle="modal"
                                     data-bs-target="#viewLeadModal"
                                     data-lead-id="{{ $l->id }}"
                                     data-lead-name="{{ $l->FirstName }} {{ $l->LastName }}"
@@ -340,7 +340,7 @@ $staticLeads = \App\Models\Lead::with('result')->latest()->get();
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const viewButtons = document.querySelectorAll('.view-lead-btn');
-    
+
     viewButtons.forEach(function(btn) {
         btn.addEventListener('click', function() {
             const leadId = this.dataset.leadId;

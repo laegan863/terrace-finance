@@ -100,30 +100,10 @@
 
                 {{-- Offers (with submenu) --}}
                 <li class="nav-item {{ $offersOpen ? 'active' : '' }}">
-                    <a data-bs-toggle="collapse"
-                    href="#offersMenu"
-                    class="{{ $offersOpen ? '' : 'collapsed' }}"
-                    aria-expanded="{{ $offersOpen ? 'true' : 'false' }}">
+                    <a href="{{ Route::has('tfc.offers.index') ? route('tfc.offers.index') : '#' }}">
                         <i class="fas fa-handshake"></i>
-                        <p>Offers</p>
-                        <span class="caret"></span>
+                        <span class="sub-item">Post Offer</span>
                     </a>
-
-                    <div class="collapse {{ $offersOpen ? 'show' : '' }}" id="offersMenu">
-                        <ul class="nav nav-collapse">
-                            <li class="{{ $isActive('tfc.offers.index') ? 'active' : '' }}">
-                                <a href="{{ Route::has('tfc.offers.index') ? route('tfc.offers.index') : '#' }}">
-                                    <span class="sub-item">Post Offer</span>
-                                </a>
-                            </li>
-
-                            <li class="{{ $isActive('tfc.offers.history') ? 'active' : '' }}">
-                                <a href="{{ Route::has('tfc.offers.history') ? route('tfc.offers.history') : '#' }}">
-                                    <span class="sub-item">Offer History</span>
-                                </a>
-                            </li>
-                        </ul>
-                    </div>
                 </li>
 
                 <li class="nav-item {{ $applicationStatusActive ? 'active' : '' }}">
@@ -134,30 +114,10 @@
                 </li>
 
                 <li class="nav-item {{ $statusNotificationsOpen ? 'active' : '' }}">
-                    <a data-bs-toggle="collapse"
-                    href="#statusNotificationsMenu"
-                    class="{{ $statusNotificationsOpen ? '' : 'collapsed' }}"
-                    aria-expanded="{{ $statusNotificationsOpen ? 'true' : 'false' }}">
+                    <a href="{{ Route::has('tfc.status-notifications.index') ? route('tfc.status-notifications.index') : '#' }}">
                         <i class="fas fa-bell"></i>
-                        <p>Status Notifications</p>
-                        <span class="caret"></span>
+                        <span class="sub-item">Receive Status Notification</span>
                     </a>
-
-                    <div class="collapse {{ $statusNotificationsOpen ? 'show' : '' }}" id="statusNotificationsMenu">
-                        <ul class="nav nav-collapse">
-                            <li class="{{ $isActive('tfc.status-notifications.index') ? 'active' : '' }}">
-                                <a href="{{ Route::has('tfc.status-notifications.index') ? route('tfc.status-notifications.index') : '#' }}">
-                                    <span class="sub-item">Receive Status Notification</span>
-                                </a>
-                            </li>
-
-                            <li class="{{ $isActive('tfc.status-notifications.history') ? 'active' : '' }}">
-                                <a href="{{ Route::has('tfc.status-notifications.history') ? route('tfc.status-notifications.history') : '#' }}">
-                                    <span class="sub-item">Status Notification History</span>
-                                </a>
-                            </li>
-                        </ul>
-                    </div>
                 </li>
 
 

@@ -463,8 +463,20 @@
                         </button>
                     </div>
 
-                    <div class="table-responsive">
-                        <table class="table table-bordered align-middle" id="invoiceItemsTable">
+                    <div class="tf-items-table-wrap">
+                        <table class="table table-bordered align-middle tf-items-table" id="invoiceItemsTable">
+                            <colgroup>
+                                <col style="width: 300px;">
+                                <col style="width: 180px;">
+                                <col style="width: 190px;">
+                                <col style="width: 170px;">
+                                <col style="width: 170px;">
+                                <col style="width: 140px;">
+                                <col style="width: 110px;">
+                                <col style="width: 140px;">
+                                <col style="width: 120px;">
+                            </colgroup>
+
                             <thead>
                                 <tr>
                                     <th>Item Description</th>
@@ -478,14 +490,27 @@
                                     <th class="text-end">Action</th>
                                 </tr>
                             </thead>
+
                             <tbody>
                                 <tr class="invoice-item-row">
-                                    <td><input class="form-control" name="Items[0][ItemDescription]" required></td>
-                                    <td><input class="form-control" name="Items[0][Brand]" required></td>
-                                    <td><input class="form-control" name="Items[0][SerialNumber]"></td>
-                                    <td><input class="form-control" name="Items[0][SKU]" required></td>
-                                    <td>
-                                        <select class="form-control" name="Items[0][Condition]" required>
+                                    <td class="tf-col-description">
+                                        <input class="form-control" name="Items[0][ItemDescription]" required>
+                                    </td>
+
+                                    <td class="tf-col-brand">
+                                        <input class="form-control" name="Items[0][Brand]" required>
+                                    </td>
+
+                                    <td class="tf-col-serial">
+                                        <input class="form-control" name="Items[0][SerialNumber]">
+                                    </td>
+
+                                    <td class="tf-col-sku">
+                                        <input class="form-control" name="Items[0][SKU]" required>
+                                    </td>
+
+                                    <td class="tf-col-condition">
+                                        <select class="form-select" name="Items[0][Condition]" required>
                                             <option value="New">New</option>
                                             <option value="Used">Used</option>
                                             <option value="CPO">CPO</option>
@@ -494,16 +519,29 @@
                                             <option value="Salvage">Salvage</option>
                                         </select>
                                     </td>
-                                    <td><input class="form-control text-end" name="Items[0][Price]" required placeholder="0.00"></td>
-                                    <td><input class="form-control text-end" name="Items[0][Quantity]" required value="1"></td>
-                                    <td><input class="form-control text-end" name="Items[0][Discount]" placeholder="0.00"></td>
-                                    <td class="text-end">
-                                        <button type="button" class="btn btn-sm btn-outline-danger remove-item" disabled>Remove</button>
+
+                                    <td class="tf-col-price">
+                                        <input class="form-control text-end" name="Items[0][Price]" required placeholder="0.00">
+                                    </td>
+
+                                    <td class="tf-col-qty">
+                                        <input class="form-control text-end" name="Items[0][Quantity]" required value="1">
+                                    </td>
+
+                                    <td class="tf-col-discount">
+                                        <input class="form-control text-end" name="Items[0][Discount]" placeholder="0.00">
+                                    </td>
+
+                                    <td class="text-end tf-col-action">
+                                        <button type="button" class="btn btn-sm btn-outline-danger remove-item" disabled>
+                                            Remove
+                                        </button>
                                     </td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
+
 
                 </div>
 

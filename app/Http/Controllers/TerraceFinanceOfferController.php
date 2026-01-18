@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\OfferRequest;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 
@@ -32,7 +33,6 @@ class TerraceFinanceOfferController extends Controller
         $request = [
             'ApplicationID' => 75524,
             'Offer' => 'core',
-            'IncludeBankDetails' => 1,
             'BankDetails' => [
                 'BankName' => 'bankTest',
                 'BankState' => 'AZ',
@@ -52,88 +52,118 @@ class TerraceFinanceOfferController extends Controller
         return compact('request', 'response');
     }
 
-    private function offerHistory(): array
-    {
-        return [
-            [
-                'ApplicationID' => 75524,
-                'Offer' => 'core',
-                'BankName' => 'bankTest',
-                'AccountType' => 'Checking',
-                'ResultUrl' => 'https://terracefinance-ux-qa.azurewebsites.net/6c78f897-d0dd-4d5c-835c-848d137e26e6/signingRoom/cf-offer',
-                'CreatedAt' => 'Jan 13, 2026 10:40 AM',
-            ],
-            [
-                'ApplicationID' => 89383,
-                'Offer' => 'core',
-                'BankName' => '-',
-                'AccountType' => '-',
-                'ResultUrl' => 'https://terracefinance-ux-qa.azurewebsites.net/xxxx/signingRoom/cf-offer',
-                'CreatedAt' => 'Jan 12, 2026 03:05 PM',
-            ],
-        ];
-    }
-
     public function index()
     {
+        $logs = OfferRequest::with('result')
+            ->orderByDesc('id')
+            ->paginate(10);
+
+        $latest = OfferRequest::with('result')->latest()->first();
+
+        if ($latest && $latest->result) {
+            $requestData = [
+                'ApplicationID' => $latest->ApplicationID,
+                'Offer' => $latest->Offer,
+            ];
+
+            if (!empty($latest->BankDetails)) {
+                $requestData['BankDetails'] = $latest->BankDetails;
+            }
+
+            return view('terrace-finance.offers.index', [
+                'result' => [
+                    'request' => $requestData,
+                    'response' => $latest->result->response ?? [],
+                ],
+                'offerOptions' => $this->offerOptions(),
+                'logs' => $logs,
+            ]);
+        }
+
         return view('terrace-finance.offers.index', [
             'result' => $this->sampleResult(),
             'offerOptions' => $this->offerOptions(),
+            'logs' => $logs,
+        ]);
+    }
+
+
+    public function history()
+    {
+        $logs = OfferRequest::with('result')
+            ->orderByDesc('id')
+            ->paginate(10);
+
+        return view('terrace-finance.offers.history', [
+            'logs' => $logs,
         ]);
     }
 
     public function store(Request $request)
     {
         $data = $request->validate([
-            'ApplicationID' => ['required', 'integer'],
-            'Offer' => ['required', 'string', 'min:1', 'max:64'],
+        'ApplicationID' => ['required', 'integer'],
+        'Offer' => ['required', 'string', 'min:1', 'max:64'],
 
-            'IncludeBankDetails' => ['nullable', 'in:1'],
+        // Checkbox: when unchecked it's absent, when checked it's "1"
+        'IncludeBankDetails' => ['nullable', 'in:1'],
 
-            'BankDetails.BankName' => ['required_if:IncludeBankDetails,1', 'string', 'min:1', 'max:128'],
-            'BankDetails.BankState' => ['nullable', 'string', 'max:2'],
-            'BankDetails.AccountNumber' => ['required_if:IncludeBankDetails,1', 'string', 'min:1', 'max:64'],
-            'BankDetails.StartDateOfBankAccount' => ['nullable', 'string', 'max:32'],
-            'BankDetails.RoutingNumber' => ['required_if:IncludeBankDetails,1', 'digits:9'],
-            'BankDetails.AccountType' => ['nullable', 'string', 'max:64'],
-        ]);
+        // BankDetails fields should only be validated if IncludeBankDetails=1
+        'BankDetails' => ['nullable', 'array'],
+        'BankDetails.BankName' => ['nullable', 'string', 'min:1', 'max:128', 'required_if:IncludeBankDetails,1'],
+        'BankDetails.BankState' => ['nullable', 'string', 'max:2'],
+        'BankDetails.AccountNumber' => ['nullable', 'string', 'min:1', 'max:64', 'required_if:IncludeBankDetails,1'],
+        'BankDetails.StartDateOfBankAccount' => ['nullable', 'string', 'max:32'],
+        'BankDetails.RoutingNumber' => ['nullable', 'digits:9', 'required_if:IncludeBankDetails,1'],
+        'BankDetails.AccountType' => ['nullable', 'string', 'max:64'],
+    ]);
 
-        // If bank details not included, remove them from payload
-        if (($data['IncludeBankDetails'] ?? null) !== '1') {
-            unset($data['BankDetails']);
-        }
 
-        // Normalize StartDateOfBankAccount to MM/DD/YYYY if provided
-        if (!empty($data['BankDetails']['StartDateOfBankAccount'] ?? null)) {
-            try {
-                $data['BankDetails']['StartDateOfBankAccount'] = Carbon::createFromFormat(
-                    'm/d/Y',
-                    $data['BankDetails']['StartDateOfBankAccount']
-                )->format('m/d/Y');
-            } catch (\Throwable $e) {
-                return back()->withInput()->withErrors([
-                    'BankDetails.StartDateOfBankAccount' => 'StartDateOfBankAccount must be in MM/DD/YYYY format.',
-                ]);
+        $bankDetails = null;
+
+        if (($data['IncludeBankDetails'] ?? null) === '1') {
+            $bankDetails = $data['BankDetails'] ?? [];
+
+            if (!empty($bankDetails['StartDateOfBankAccount'])) {
+                try {
+                    $bankDetails['StartDateOfBankAccount'] = Carbon::createFromFormat(
+                        'm/d/Y',
+                        $bankDetails['StartDateOfBankAccount']
+                    )->format('m/d/Y');
+                } catch (\Throwable $e) {
+                    return back()->withInput()->withErrors([
+                        'BankDetails.StartDateOfBankAccount' => 'StartDateOfBankAccount must be in MM/DD/YYYY format.',
+                    ]);
+                }
             }
         }
 
-        // Sample response structure as documented
+        // 1) Save request log
+        $offerRequest = OfferRequest::create([
+            'ApplicationID' => (int)$data['ApplicationID'],
+            'Offer' => $data['Offer'],
+            'BankDetails' => $bankDetails,
+            'status' => 'pending',
+        ]);
+
+        // 2) Response (static for now)
+        $httpStatus = 200;
         $response = [
             'IsSuccess' => true,
             'Message' => 'Offer saved successfully',
             'Result' => 'https://terracefinance-ux-qa.azurewebsites.net/6c78f897-d0dd-4d5c-835c-848d137e26e6/signingRoom/cf-offer',
         ];
 
-        return view('terrace-finance.offers.index', [
-            'result' => ['request' => $data, 'response' => $response],
-            'offerOptions' => $this->offerOptions(),
+        // 3) Save result
+        $offerRequest->result()->create([
+            'http_status' => $httpStatus,
+            'response' => $response,
         ]);
-    }
 
-    public function history()
-    {
-        return view('terrace-finance.offers.history', [
-            'rows' => $this->offerHistory(),
-        ]);
+        // 4) Update status
+        $offerRequest->status = !empty($response['IsSuccess']) ? 'success' : 'failed';
+        $offerRequest->save();
+
+        return redirect()->route('tfc.offers.index');
     }
 }

@@ -2,70 +2,78 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\StatusNotificationRequest;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Validator;
 
 class TerraceFinanceStatusNotificationController extends Controller
 {
-    private const STORE_FILE = 'tfc/status_notifications.jsonl';
-
     /**
-     * Index: shows latest + recent preview.
-     * If there are no stored notifications yet, it will return a sample "latest/recent"
-     * for display only (not stored).
+     * Index: latest + recent + logs (paginated)
      */
     public function index()
     {
-        $recent = $this->readRecent(5);
-        $latest = $recent[0] ?? null;
+        $latest = StatusNotificationRequest::with('result')->latest()->first();
 
-        if (!$latest) {
-            $samples = $this->displaySamples();
-            $latest = $samples[0];
-            $recent = $samples;
-        }
+        $recent = StatusNotificationRequest::with('result')
+            ->orderByDesc('id')
+            ->take(5)
+            ->get();
 
-        $payload = $latest['payload'] ?? null;
+        $logs = StatusNotificationRequest::with('result')
+            ->orderByDesc('id')
+            ->paginate(10);
 
         $stats = [
-            'total' => $this->countAll(),
-            'last_received_at' => $latest['received_at'] ?? '-',
-            'last_application_id' => is_array($payload) ? ($payload['ApplicationID'] ?? '-') : '-',
-            'last_status' => is_array($payload) ? ($payload['ApplicationStatus'] ?? '-') : '-',
+            'total' => StatusNotificationRequest::count(),
+            'last_received_at' => $latest ? optional($latest->created_at)->format('Y-m-d H:i') : '-',
+            'last_application_id' => $latest?->ApplicationID ?? '-',
+            'last_status' => $latest?->ApplicationStatus ?? '-',
         ];
 
         return view('terrace-finance.status-notifications.index', [
             'latest' => $latest,
             'recent' => $recent,
+            'logs' => $logs,
             'stats' => $stats,
         ]);
     }
 
     /**
-     * History: shows more stored notifications.
-     * If storage is empty, show sample rows for display only.
+     * Manual receive (from UI form).
+     * This stores a notification record using the same payload fields.
      */
-    public function history()
+    public function manualReceive(Request $request)
     {
-        $rows = $this->readRecent(200);
+        $data = $this->validateAndNormalizePayload($request);
 
-        if (empty($rows)) {
-            $rows = $this->displaySamples();
-        }
+        $req = StatusNotificationRequest::create(array_merge($data, [
+            'source' => 'manual',
+            'token_header' => null,
+            'authorization_header' => null,
+            'status' => 'pending',
+            'raw_payload' => $request->all(),
+        ]));
 
-        return view('terrace-finance.status-notifications.history', [
-            'rows' => $rows,
-            'total' => $this->countAll(),
+        $response = [
+            'isSuccess' => true,
+            'message' => 'Notification received.',
+        ];
+
+        $req->result()->create([
+            'http_status' => 200,
+            'response' => $response,
         ]);
+
+        $req->status = 'success';
+        $req->save();
+
+        return redirect()->route('tfc.status-notifications.index');
     }
 
     /**
-     * Webhook: Terrace Finance calls this endpoint with HTTP POST.
-     * Requires a static key in request header.
-     * Supports:
-     * - Token: <key>
-     * - Authorization: Bearer <key>
-     * - Authorization: <key>
+     * Webhook receive (real live endpoint).
+     * Validates static key via Token or Authorization header.
      */
     public function webhook(Request $request)
     {
@@ -87,146 +95,104 @@ class TerraceFinanceStatusNotificationController extends Controller
             ], 401);
         }
 
-        $payload = $request->all();
+        $data = $this->validateAndNormalizePayload($request);
 
-        if (!is_array($payload)) {
-            return response()->json([
-                'isSuccess' => false,
-                'message' => 'Invalid payload.',
-            ], 400);
-        }
-
-        // Must include at least ApplicationID + ApplicationStatus
-        if (empty($payload['ApplicationID']) || empty($payload['ApplicationStatus'])) {
-            return response()->json([
-                'isSuccess' => false,
-                'message' => 'ApplicationID and ApplicationStatus are required.',
-            ], 400);
-        }
-
-        $payload = $this->normalizeNotificationPayload($payload);
-
-        $this->appendNotification([
-            'received_at' => now()->format('Y-m-d H:i:s'),
+        $req = StatusNotificationRequest::create(array_merge($data, [
             'source' => 'webhook',
-            'headers' => [
-                'Token' => $tokenHeader ?: null,
-                'Authorization' => $authHeader ?: null,
-            ],
-            'payload' => $payload,
-        ]);
+            'token_header' => $tokenHeader ?: null,
+            'authorization_header' => $authHeader ?: null,
+            'status' => 'pending',
+            'raw_payload' => $request->all(),
+        ]));
 
-        return response()->json([
+        $response = [
             'isSuccess' => true,
             'message' => 'Notification received.',
-        ]);
-    }
-
-    /**
-     * Keep only documented fields used by the notification examples.
-     */
-    private function normalizeNotificationPayload(array $payload): array
-    {
-        $normalized = [
-            'ApplicationID' => $payload['ApplicationID'] ?? null,
-            'LeadID' => $payload['LeadID'] ?? null,
-            'InvoiceNumber' => $payload['InvoiceNumber'] ?? '',
-            'FundedAmount' => $payload['FundedAmount'] ?? null,
-            'ApprovalAmount' => $payload['ApprovalAmount'] ?? null,
-            'ApplicationStatus' => $payload['ApplicationStatus'] ?? null,
-            'LenderName' => $payload['LenderName'] ?? '',
-            'Offer' => $payload['Offer'] ?? null,
-            'InvoiceID' => $payload['InvoiceID'] ?? null,
         ];
 
-        // Normalize one common spelling variant if it appears
-        if ($normalized['ApplicationStatus'] === 'No Lender') {
-            $normalized['ApplicationStatus'] = 'NoLender';
-        }
+        $req->result()->create([
+            'http_status' => 200,
+            'response' => $response,
+        ]);
 
-        return $normalized;
-    }
+        $req->status = 'success';
+        $req->save();
 
-    private function appendNotification(array $row): void
-    {
-        Storage::disk('local')->makeDirectory('tfc');
-        $line = json_encode($row, JSON_UNESCAPED_SLASHES) . PHP_EOL;
-        Storage::disk('local')->append(self::STORE_FILE, trim($line));
-    }
-
-    private function readRecent(int $limit): array
-    {
-        if (!Storage::disk('local')->exists(self::STORE_FILE)) {
-            return [];
-        }
-
-        $content = Storage::disk('local')->get(self::STORE_FILE);
-        $lines = array_values(array_filter(explode("\n", $content)));
-
-        $lines = array_slice($lines, max(0, count($lines) - $limit));
-        $rows = [];
-
-        // newest first
-        for ($i = count($lines) - 1; $i >= 0; $i--) {
-            $row = json_decode($lines[$i], true);
-            if (is_array($row)) {
-                $rows[] = $row;
-            }
-        }
-
-        return $rows;
-    }
-
-    private function countAll(): int
-    {
-        if (!Storage::disk('local')->exists(self::STORE_FILE)) {
-            return 0;
-        }
-        $content = Storage::disk('local')->get(self::STORE_FILE);
-        $lines = array_values(array_filter(explode("\n", $content)));
-        return count($lines);
+        return response()->json($response, 200);
     }
 
     /**
-     * Display-only sample rows (not stored). Used when storage is empty.
+     * Validates & normalizes the notification payload fields.
+     * - Offer can be null or JSON array/object
+     * - Amounts are numeric and limited to avoid DECIMAL overflow
      */
-    private function displaySamples(): array
+    private function validateAndNormalizePayload(Request $request): array
     {
-        $baseHeaders = ['Token' => 'sample'];
+        // If your DB columns are DECIMAL(12,2), max is 9999999999.99
+        // If you change DB to DECIMAL(18,2), max is 9999999999999999.99
+        $maxMoney = 9999999999.99;
+
+        $rules = [
+            'ApplicationID' => ['required', 'integer'],
+            'LeadID' => ['nullable', 'integer'],
+            'InvoiceNumber' => ['nullable', 'string', 'max:256'],
+            'InvoiceID' => ['nullable', 'integer'],
+
+            'ApprovalAmount' => ['nullable', 'numeric', 'max:' . $maxMoney],
+            'FundedAmount' => ['nullable', 'numeric', 'max:' . $maxMoney],
+
+            'ApplicationStatus' => ['required', 'string', 'max:64'],
+            'LenderName' => ['nullable', 'string', 'max:128'],
+
+            // Offer is optional; in the form we accept JSON text
+            'Offer' => ['nullable', 'string'],
+        ];
+
+        $validator = Validator::make($request->all(), $rules);
+
+        // Custom Offer JSON validation (only if provided)
+        $validator->after(function ($v) use ($request) {
+            $raw = trim((string) $request->input('Offer', ''));
+
+            if ($raw === '') {
+                return;
+            }
+
+            $decoded = json_decode($raw, true);
+
+            if (!is_array($decoded)) {
+                $v->errors()->add('Offer', 'Offer must be valid JSON (array or object) or empty.');
+                return;
+            }
+        });
+
+        $validator->validate();
+
+        $offerRaw = trim((string) $request->input('Offer', ''));
+        $offerParsed = null;
+
+        if ($offerRaw !== '') {
+            $offerParsed = json_decode($offerRaw, true);
+        }
+
+        $applicationStatus = $request->input('ApplicationStatus');
+        if ($applicationStatus === 'No Lender') {
+            $applicationStatus = 'NoLender';
+        }
 
         return [
-            [
-                'received_at' => now()->subMinutes(5)->format('Y-m-d H:i:s'),
-                'source' => 'sample',
-                'headers' => $baseHeaders,
-                'payload' => $this->normalizeNotificationPayload([
-                    'ApplicationID' => 1020472,
-                    'LeadID' => 356811,
-                    'InvoiceNumber' => '3885adcf-2358-4a78-ad16-eb7c5b882239',
-                    'FundedAmount' => null,
-                    'ApprovalAmount' => 5000.00,
-                    'ApplicationStatus' => 'Approved',
-                    'LenderName' => 'Vernance, LLC',
-                    'Offer' => null,
-                    'InvoiceID' => 219718,
-                ]),
-            ],
-            [
-                'received_at' => now()->subMinutes(18)->format('Y-m-d H:i:s'),
-                'source' => 'sample',
-                'headers' => $baseHeaders,
-                'payload' => $this->normalizeNotificationPayload([
-                    'ApplicationID' => 883820,
-                    'LeadID' => 274152,
-                    'InvoiceNumber' => '1b071fc2-f748-499f-afc4-43ba31832ce8',
-                    'FundedAmount' => 852.74,
-                    'ApprovalAmount' => 1500.00,
-                    'ApplicationStatus' => 'Funded',
-                    'LenderName' => 'Vernance, LLC',
-                    'Offer' => null,
-                    'InvoiceID' => 159630,
-                ]),
-            ],
+            'ApplicationID' => (int) $request->input('ApplicationID'),
+            'LeadID' => $request->filled('LeadID') ? (int) $request->input('LeadID') : null,
+            'InvoiceNumber' => (string) ($request->input('InvoiceNumber') ?? ''),
+            'InvoiceID' => $request->filled('InvoiceID') ? (int) $request->input('InvoiceID') : null,
+
+            'FundedAmount' => $request->filled('FundedAmount') ? (float) $request->input('FundedAmount') : null,
+            'ApprovalAmount' => $request->filled('ApprovalAmount') ? (float) $request->input('ApprovalAmount') : null,
+
+            'ApplicationStatus' => (string) $applicationStatus,
+            'LenderName' => (string) ($request->input('LenderName') ?? ''),
+
+            'Offer' => $offerParsed,
         ];
     }
 }

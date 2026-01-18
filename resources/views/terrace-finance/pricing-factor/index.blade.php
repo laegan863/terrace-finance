@@ -256,6 +256,130 @@
             </div>
         </div>
     </div>
+
+    @if(isset($logs))
+        <div class="card mt-3">
+            <div class="card-header d-flex align-items-center justify-content-between">
+                <div>
+                    <div class="card-title mb-0">Pricing Factor Requests</div>
+                    <small class="text-muted">Latest submissions</small>
+                </div>
+
+                <button
+                    class="btn btn-sm btn-outline-secondary"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#pricingFactorLogsCollapse"
+                    aria-expanded="false"
+                    aria-controls="pricingFactorLogsCollapse"
+                >
+                    Toggle Logs
+                </button>
+            </div>
+
+            <div id="pricingFactorLogsCollapse" class="collapse">
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover align-middle tf-table">
+                            <thead>
+                                <tr>
+                                    <th title="Created At">Created At</th>
+                                    <th title="First Name">First Name</th>
+                                    <th title="Last Name">Last Name</th>
+                                    <th title="Product Information">Product Information</th>
+                                    <th title="Status">Status</th>
+                                    <th class="text-end" title="Pricing Factor">Pricing Factor</th>
+                                    <th class="text-end" title="Approval Amount">Approval Amount</th>
+                                    {{-- <th title="Application Status">Pricing Factor Status</th> --}}
+                                    <th class="text-end" title="Action">Action</th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                @forelse($logs as $log)
+                                    @php
+                                        $resp = $log->result->response ?? [];
+                                        $pf = $resp['PricingFactor'] ?? null;
+                                        $appr = $resp['ApprovalAmount'] ?? null;
+                                        $appStatus = $resp['Status'] ?? null;
+
+                                        $statusChipClass = 'tf-chip-soft';
+                                        if ($log->status === 'success') $statusChipClass = 'tf-chip-money';
+                                        if ($log->status === 'failed') $statusChipClass = 'tf-chip-warning';
+                                    @endphp
+
+                                    <tr>
+                                        <td class="text-muted">{{ $log->created_at?->format('Y-m-d H:i') }}</td>
+                                        <td>{{ $log->FirstName }}</td>
+                                        <td>{{ $log->LastName }}</td>
+                                        <td><span class="tf-chip tf-chip-info">{{ $log->ProductInformation }}</span></td>
+
+                                        <td>
+                                            <span class="tf-chip {{ $statusChipClass }}">{{ ucfirst($log->status) }}</span>
+                                        </td>
+
+                                        <td class="text-end">
+                                            @if(is_null($pf))
+                                                <span class="tf-chip tf-chip-muted">-</span>
+                                            @else
+                                                <span class="tf-chip tf-chip-soft">{{ number_format((float)$pf, 4) }}</span>
+                                            @endif
+                                        </td>
+
+                                        <td class="text-end">
+                                            @if(is_null($appr))
+                                                <span class="tf-chip tf-chip-muted">-</span>
+                                            @else
+                                                <span class="tf-chip tf-chip-money">${{ number_format((float)$appr, 2) }}</span>
+                                            @endif
+                                        </td>
+
+                                        {{-- <td>
+                                            <span class="tf-chip tf-chip-soft">{{ $appStatus ?? '-' }}</span>
+                                        </td> --}}
+
+                                        <td class="text-end">
+                                            <button
+                                                type="button"
+                                                class="btn btn-sm btn-outline-primary pfViewBtn"
+                                                data-id="{{ $log->id }}"
+                                                data-name="{{ $log->FirstName }} {{ $log->LastName }}"
+                                                data-phone="{{ $log->PhoneNumber }}"
+                                                data-email="{{ $log->Email }}"
+                                                data-product="{{ $log->ProductInformation }}"
+                                                data-address="{{ $log->Address }}, {{ $log->City }}, {{ $log->State }} {{ $log->Zip }}"
+                                                data-ssn="{{ $log->SSN ?? '-' }}"
+                                                data-dob="{{ $log->DOB ?? '-' }}"
+                                                data-grossincome="{{ $log->GrossIncome ?? '-' }}"
+                                                data-fingerprint="{{ $log->Fingerprint ?? '-' }}"
+                                                data-created="{{ optional($log->created_at)->format('Y-m-d H:i') }}"
+                                                data-status="{{ $log->status }}"
+                                                data-http="{{ $log->result->http_status ?? '-' }}"
+                                                data-response='@json($log->result->response ?? [])'
+                                                data-offers='@json($log->result->offers ?? [])'
+                                            >
+                                                View
+                                            </button>
+                                        </td>
+                                    </tr>
+                                @empty
+                                    <tr>
+                                        <td colspan="8" class="text-muted">No requests available.</td>
+                                    </tr>
+                                @endforelse
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="mt-3">
+                        {{ $logs->links() }}
+                    </div>
+                </div>
+            </div>
+        </div>
+    @endif
+
+
 @endif
 
 <div class="modal fade" id="pfModal" tabindex="-1" aria-hidden="true">
@@ -277,7 +401,7 @@
                         <div class="alert alert-danger mb-4">{{ $errors->first() }}</div>
                     @endif
 
-                    <div class="row g-3">
+                    <div class="row">
                         <div class="col-md-6">
                             <div class="form-group mb-0">
                                 <label class="form-label">First Name</label>
@@ -399,6 +523,94 @@
         </div>
     </div>
 </div>
+
+{{-- View Pricing Factor Modal --}}
+<div class="modal fade" id="viewPricingFactorModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title mb-0">Pricing Factor Details <span id="viewPfId" class="text-muted"></span></h5>
+                    <small class="text-muted">View request information and API response</small>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+
+            <div class="modal-body p-4">
+                <h6 class="fw-bold mb-3"><i class="fas fa-user me-2"></i>Request Information</h6>
+                <div class="row mb-4">
+                    <div class="col-md-6 mb-2">
+                        <small class="text-muted d-block">Name</small>
+                        <span id="viewPfName" class="fw-semibold"></span>
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <small class="text-muted d-block">Phone</small>
+                        <span id="viewPfPhone"></span>
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <small class="text-muted d-block">Email</small>
+                        <span id="viewPfEmail"></span>
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <small class="text-muted d-block">Product Information</small>
+                        <span id="viewPfProduct"></span>
+                    </div>
+                    <div class="col-12 mb-2">
+                        <small class="text-muted d-block">Address</small>
+                        <span id="viewPfAddress"></span>
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <small class="text-muted d-block">SSN</small>
+                        <span id="viewPfSsn"></span>
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <small class="text-muted d-block">Date of Birth</small>
+                        <span id="viewPfDob"></span>
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <small class="text-muted d-block">Gross Income</small>
+                        <span id="viewPfGrossIncome"></span>
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <small class="text-muted d-block">Fingerprint</small>
+                        <span id="viewPfFingerprint" class="text-break"></span>
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <small class="text-muted d-block">Created At</small>
+                        <span id="viewPfCreated"></span>
+                    </div>
+                </div>
+
+                <hr>
+
+                <h6 class="fw-bold mb-3"><i class="fas fa-info-circle me-2"></i>Status</h6>
+                <div class="mb-4">
+                    <span id="viewPfStatusBadge" class="badge"></span>
+                    <span id="viewPfHttpStatus" class="badge bg-secondary ms-2"></span>
+                </div>
+
+                <hr>
+
+                <h6 class="fw-bold mb-3"><i class="fas fa-code me-2"></i>API Response</h6>
+                <div class="bg-light rounded p-3">
+                    <pre id="viewPfResponse" class="mb-0" style="white-space: pre-wrap; word-break: break-word; max-height: 300px; overflow-y: auto;"></pre>
+                </div>
+
+                <hr>
+
+                <h6 class="fw-bold mb-3"><i class="fas fa-tags me-2"></i>Offers</h6>
+                <div class="bg-light rounded p-3">
+                    <pre id="viewPfOffers" class="mb-0" style="white-space: pre-wrap; word-break: break-word; max-height: 300px; overflow-y: auto;"></pre>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 @endsection
 
 @push('scripts')
@@ -465,6 +677,68 @@
             syncDateInputs(pfModal);
         });
     }
+})();
+</script>
+
+<script>
+(function () {
+    const modalEl = document.getElementById('viewPricingFactorModal');
+    if (!modalEl) return;
+
+    const modal = new bootstrap.Modal(modalEl);
+
+    function setText(id, value) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = (value === null || value === undefined || value === '') ? '-' : value;
+    }
+
+    function setBadge(id, status) {
+        const el = document.getElementById(id);
+        if (!el) return;
+
+        el.className = 'badge';
+
+        if (status === 'success') el.classList.add('bg-success');
+        else if (status === 'failed') el.classList.add('bg-danger');
+        else el.classList.add('bg-warning', 'text-dark');
+
+        el.textContent = status ? (status.charAt(0).toUpperCase() + status.slice(1)) : '-';
+    }
+
+    document.addEventListener('click', function (e) {
+        const btn = e.target.closest('.pfViewBtn');
+        if (!btn) return;
+
+        setText('viewPfId', '#' + (btn.dataset.id || '-'));
+        setText('viewPfName', btn.dataset.name);
+        setText('viewPfPhone', btn.dataset.phone);
+        setText('viewPfEmail', btn.dataset.email);
+        setText('viewPfProduct', btn.dataset.product);
+        setText('viewPfAddress', btn.dataset.address);
+        setText('viewPfSsn', btn.dataset.ssn);
+        setText('viewPfDob', btn.dataset.dob);
+        setText('viewPfGrossIncome', btn.dataset.grossincome);
+        setText('viewPfFingerprint', btn.dataset.fingerprint);
+        setText('viewPfCreated', btn.dataset.created);
+
+        setBadge('viewPfStatusBadge', btn.dataset.status);
+        setText('viewPfHttpStatus', 'HTTP ' + (btn.dataset.http || '-'));
+
+        function prettyFromDataset(value, fallback) {
+            try {
+                const obj = JSON.parse(value);
+                return JSON.stringify(obj, null, 4);
+            } catch (e) {
+                return fallback;
+            }
+        }
+
+        setText('viewPfResponse', prettyFromDataset(btn.dataset.response || '{}', '{}'));
+        setText('viewPfOffers', prettyFromDataset(btn.dataset.offers || '[]', '[]'));
+
+
+        modal.show();
+    });
 })();
 </script>
 @endpush

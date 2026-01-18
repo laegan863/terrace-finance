@@ -37,8 +37,6 @@ Route::middleware(['tfc.token'])->group(function () {
 
 });
 
-Route::view('/tf-test', 'terrace-finance.test')
-    ->name('tf.test');
 Route::view('/dashboard', 'terrace-finance.dashboard')
     ->name('dashboard');
 
@@ -73,6 +71,9 @@ Route::get('/tfc/offers/history', [TerraceFinanceOfferController::class, 'histor
 
 Route::get('/tfc/application-status', [TerraceFinanceApplicationStatusController::class, 'index'])
     ->name('tfc.application-status.index');
+Route::post('/tfc/application-status', [TerraceFinanceApplicationStatusController::class, 'store'])
+    ->name('tfc.application-status.store');
+
 
 Route::get('/tfc/status-notifications', [TerraceFinanceStatusNotificationController::class, 'index'])
     ->name('tfc.status-notifications.index');
@@ -80,6 +81,12 @@ Route::get('/tfc/status-notifications/history', [TerraceFinanceStatusNotificatio
     ->name('tfc.status-notifications.history');
 Route::post('/tfc/status-notifications/webhook', [TerraceFinanceStatusNotificationController::class, 'webhook'])
     ->name('tfc.status-notifications.webhook');
+
+Route::get('/tfc/status-notifications', [TerraceFinanceStatusNotificationController::class, 'index'])
+    ->name('tfc.status-notifications.index');
+Route::post('/tfc/status-notifications/receive', [TerraceFinanceStatusNotificationController::class, 'manualReceive'])
+    ->name('tfc.status-notifications.receive');
+
 
 
 

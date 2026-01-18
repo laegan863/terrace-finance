@@ -2,8 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
+use App\Models\ApplicationRequest;
 use Carbon\Carbon;
+use Illuminate\Http\Request;
 
 class TerraceFinanceApplicationController extends Controller
 {
@@ -21,9 +22,51 @@ class TerraceFinanceApplicationController extends Controller
         return ['Monthly', 'BiWeekly', 'SemiMonthly', 'Weekly'];
     }
 
-    private function sampleResult(): array
+    public function index()
     {
-        $request = [
+        // Paginated logs (latest first)
+        $history = ApplicationRequest::with('result')
+            ->orderByDesc('id')
+            ->paginate(10)
+            ->through(function ($log) {
+                $resp = $log->result->response ?? [];
+                return [
+                    'ApplicationID' => $resp['Result'] ?? $log->id,
+                    'Applicant' => $log->FirstName . ' ' . $log->LastName,
+                    'ProductInformation' => $log->ProductInformation,
+                    'BestEstimate' => (float) $log->BestEstimate,
+                    'PayFrequency' => $log->PayFrequency,
+                    'Status' => $log->status,
+                    'CreatedAt' => optional($log->created_at)->format('M d, Y h:i A'),
+                ];
+            });
+
+        // Latest result shown at the top
+        $latest = ApplicationRequest::with('result')->latest()->first();
+
+        if ($latest && $latest->result) {
+            $requestData = $latest->only([
+                'FirstName','LastName','CellNumber','CellValidation',
+                'Address','Address2','City','State','Zip',
+                'Email','Fingerprint','Consent','SSN','DOB',
+                'GrossIncome','NetIncome','PayFrequency',
+                'LastPayDate','NextPayDate','ProductInformation',
+                'IdentificationDocumentID','BestEstimate',
+            ]);
+
+            return view('terrace-finance.applications.index', [
+                'products' => $this->products(),
+                'payFrequencies' => $this->payFrequencies(),
+                'result' => [
+                    'request' => $requestData,
+                    'response' => $latest->result->response ?? [],
+                ],
+                'history' => $history,
+            ]);
+        }
+
+        // Fallback sample if no logs yet (keeps your page “live”)
+        $sampleRequest = [
             'FirstName' => 'John',
             'LastName' => 'Doe',
             'CellNumber' => '5551112222',
@@ -48,7 +91,6 @@ class TerraceFinanceApplicationController extends Controller
             'BestEstimate' => 1500.00,
         ];
 
-        // V2 standardized response shape (recommended by the spec)
         $response = [
             'IsSuccess' => true,
             'Message' => 'Application created successfully application # 99044',
@@ -64,53 +106,16 @@ class TerraceFinanceApplicationController extends Controller
             'PricingFactor' => null,
             'ApprovalAmount' => null,
             'Status' => null,
-        ]; // :contentReference[oaicite:6]{index=6}
-
-        return compact('request', 'response');
-    }
-
-    private function sampleHistory(): array
-    {
-        return [
-            [
-                'ApplicationID' => 99044,
-                'Applicant' => 'John Doe',
-                'ProductInformation' => 'Tire',
-                'BestEstimate' => 1500.00,
-                'PayFrequency' => 'Monthly',
-                'Status' => 'Created',
-                'CreatedAt' => 'Jan 13, 2026 09:10 AM',
-            ],
-            [
-                'ApplicationID' => 99012,
-                'Applicant' => 'Maria Santos',
-                'ProductInformation' => 'Jewelry',
-                'BestEstimate' => 2500.00,
-                'PayFrequency' => 'BiWeekly',
-                'Status' => 'Created',
-                'CreatedAt' => 'Jan 12, 2026 04:25 PM',
-            ],
-            [
-                'ApplicationID' => 98988,
-                'Applicant' => 'Alex Rivera',
-                'ProductInformation' => 'Home',
-                'BestEstimate' => 3200.00,
-                'PayFrequency' => 'Weekly',
-                'Status' => 'Created',
-                'CreatedAt' => 'Jan 12, 2026 10:02 AM',
-            ],
         ];
-    }
-
-    public function index()
-    {
-        $sample = $this->sampleResult();
 
         return view('terrace-finance.applications.index', [
             'products' => $this->products(),
             'payFrequencies' => $this->payFrequencies(),
-            'result' => $sample,
-            'history' => $this->sampleHistory(),
+            'result' => [
+                'request' => $sampleRequest,
+                'response' => $response,
+            ],
+            'history' => $history,
         ]);
     }
 
@@ -121,8 +126,6 @@ class TerraceFinanceApplicationController extends Controller
             'LastName'  => ['required','string','min:1','max:16'],
 
             'CellNumber' => ['required','digits:10'],
-
-            // These are shown as required fields in the spec (example uses booleans)
             'CellValidation' => ['required','boolean'],
             'Consent' => ['required','boolean'],
 
@@ -137,16 +140,13 @@ class TerraceFinanceApplicationController extends Controller
 
             'SSN' => ['required','digits:9'],
 
-            // Date fields must be MM/DD/YYYY
             'DOB' => ['required','string','max:10'],
             'LastPayDate' => ['required','string','max:10'],
             'NextPayDate' => ['nullable','string','max:10'],
 
-            // Either GrossIncome or NetIncome must be passed
             'GrossIncome' => ['nullable','numeric','required_without:NetIncome'],
             'NetIncome' => ['nullable','numeric','required_without:GrossIncome'],
 
-            // PayFrequency is case sensitive (enforced by in:)
             'PayFrequency' => ['required','in:Monthly,BiWeekly,SemiMonthly,Weekly'],
 
             'ProductInformation' => ['required','string','min:1','max:100'],
@@ -165,7 +165,14 @@ class TerraceFinanceApplicationController extends Controller
             }
         }
 
-        // Treat as live: return a response shaped like V2.0 standardized response
+        // 1) Save request
+        $appRequest = ApplicationRequest::create(array_merge($data, [
+            'status' => 'pending',
+        ]));
+
+        // 2) Response (replace later with real API call)
+        $httpStatus = 200;
+
         $response = [
             'IsSuccess' => true,
             'Message' => 'Application created successfully application # 99044',
@@ -181,13 +188,19 @@ class TerraceFinanceApplicationController extends Controller
             'PricingFactor' => null,
             'ApprovalAmount' => null,
             'Status' => null,
-        ]; // :contentReference[oaicite:7]{index=7}
+        ];
 
-        return view('terrace-finance.applications.index', [
-            'products' => $this->products(),
-            'payFrequencies' => $this->payFrequencies(),
-            'result' => ['request' => $data, 'response' => $response],
-            'history' => $this->sampleHistory(),
+        // 3) Save result
+        $appRequest->result()->create([
+            'http_status' => $httpStatus,
+            'response' => $response,
         ]);
+
+        // 4) Update status
+        $appRequest->status = !empty($response['IsSuccess']) ? 'success' : 'failed';
+        $appRequest->save();
+
+        // Redirect back to index so pagination behaves cleanly
+        return redirect()->route('tfc.applications.index');
     }
 }
