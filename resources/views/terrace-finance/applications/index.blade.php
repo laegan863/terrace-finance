@@ -160,9 +160,20 @@
             <div class="card-title mb-0">Recent Applications</div>
             <small class="text-muted">Latest submissions</small>
         </div>
+
+        <button
+            class="btn btn-sm btn-outline-secondary"
+            type="button"
+            data-bs-toggle="collapse"
+            data-bs-target="#postApplicationLogs"
+            aria-expanded="false"
+            aria-controls="postApplicationLogs"
+        >
+            Toggle Logs
+        </button>
     </div>
 
-    <div class="card-body">
+    <div id="postApplicationLogs" class="collapse">
         <div class="table-responsive">
             <table class="table table-striped table-hover align-middle tf-table">
                 <thead>

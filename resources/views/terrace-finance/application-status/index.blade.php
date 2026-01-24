@@ -360,9 +360,20 @@
                     <div class="card-title mb-0">Application Status Requests</div>
                     <small class="text-muted">Latest submissions</small>
                 </div>
+
+                <button
+                    class="btn btn-sm btn-outline-secondary"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#applicationStatusRequestLogs"
+                    aria-expanded="false"
+                    aria-controls="applicationStatusRequestLogs"
+                >
+                    Toggle Logs
+                </button>
             </div>
 
-            <div class="card-body">
+            <div id="applicationStatusRequestLogs" class="collapse">
                 <div class="table-responsive">
                     <table class="table table-striped table-hover align-middle tf-table">
                         <thead>
